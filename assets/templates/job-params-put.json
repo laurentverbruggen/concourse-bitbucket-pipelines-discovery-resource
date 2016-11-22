@@ -1,0 +1,6 @@
+{
+  "config": {
+    "file": "%%DISCOVERY_RESOURCE_NAME%%/concourse.json"
+  },
+  "sync": true
+}

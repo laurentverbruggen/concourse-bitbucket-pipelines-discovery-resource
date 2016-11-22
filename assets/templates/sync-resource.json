@@ -1,0 +1,6 @@
+{
+  "name": "pipeline-sync",
+  "type": "pipelines-sync-resource",
+  "source": {
+  }
+}

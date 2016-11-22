@@ -1,0 +1,147 @@
+#!/bin/bash
+# vim: set ft=sh
+
+set -e
+
+exec 3>&1 # make stdout available as fd 3 for the result
+exec 1>&2 # redirect all output to stderr for logging
+
+ASSETS=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source $ASSETS/helpers/utils.sh
+source $ASSETS/helpers/bitbucket.sh
+
+# for all temporary files in 'in'
+tmpfile() {
+  tmp_file_unique "in-$1"
+}
+
+WORKING_DIR=$1
+
+if [ -z "$WORKING_DIR" ]; then
+  echo "usage: $0 <path/to/destination>" >&2
+  exit 1
+fi
+
+# for jq
+PATH=/usr/local/bin:$PATH
+
+payload=$(tmpfile request)
+cat > "$payload" <&0
+
+# reset result payload from previous check
+result_payload=$(tmpfile result)
+echo "[]" > "$result_payload"
+
+# reset result payload from previous check
+result_metadata_payload=$(tmpfile result-metadata)
+echo "[]" > "$result_metadata_payload"
+
+merge() {
+  # $1: JSON payload
+  # $2: path in $1 to use as extension object
+  # $3: source file with configuration to extend
+
+  local extension=$(jq -c "$2 // {}" < "$1")
+  jq -c ". + $extension" < "$3"
+}
+
+# parse parameters provided in get task and extend default with it
+discovery_resource=$(merge "$payload" ".params.discovery.resource" "$ASSETS/templates/discovery-resource.json")
+discovery_resource_type=$(merge "$payload" ".params.discovery.type" "$ASSETS/templates/discovery-resource-type.json")
+sync_resource=$(merge "$payload" ".params.sync.resource" "$ASSETS/templates/sync-resource.json")
+sync_resource_type=$(merge "$payload" ".params.sync.type" "$ASSETS/templates/sync-resource-type.json")
+sync_resource_name=$(jq -r '.name' <<< "$sync_resource")
+
+job_config=$(merge "$payload" ".params.job.config" "$ASSETS/templates/job-config.json")
+job_params_get=$(merge "$payload" ".params.job.params.get" "$ASSETS/templates/job-params-get.json")
+job_params_put=$(merge "$payload" ".params.job.params.put" "$ASSETS/templates/job-params-put.json")
+
+# initialize pipeline with resources and types
+pipeline=$(tmpfile pipeline)
+jq -n "{
+  resource_types: [ ${discovery_resource_type}, ${sync_resource_type} ],
+  resources: [ ${sync_resource} ]
+}" > "$pipeline"
+
+include_source() {
+
+  local tmp=$(tmpfile tmp)
+  local source_payload=$(tmpfile source)
+  cat > "$source_payload" <&0
+
+  # deletes the temp files
+  source_cleanup() {
+    rm -f "$source_payload"
+    rm -f "$tmp"
+  }
+
+  # register the cleanup function to be called on the EXIT signal
+  trap source_cleanup EXIT
+
+  # group all sources in array to determine version later
+  echo "$(jq ". + [$(jq -c '.' < "$source_payload")]" < "$result_payload")" > "$result_payload"
+
+  # source name template includes branch if branch pattern was provided
+  local source_name_template='.name'
+  if [ -n "$(jq -r '.source.branch // ""' < "$payload")" ]; then
+    source_name_template+=' + ":" + .branch'
+  fi
+
+  # capture source object to include in resource
+  local source=$(jq -c '.' < "$source_payload")
+  local source_name=$(jq -r "${source_name_template}" < "$source_payload")
+  # replace slashes to avoid wrong REST calls
+  source_name=${source_name//\//-}
+
+  # capture credentials to replace 'environment' variables in discovery resource json
+  local username=$(jq -r '.source.username // ""' < "$payload")
+  local password=$(jq -r '.source.password // ""' < "$payload")
+
+  # build resource by replacing environment variables and including source uri and branch
+  local discover_resource=$(jq ".source = ( .source + $source )" <<< "$discovery_resource")
+  discover_resource_name=$(jq -r '.name' <<< "$discover_resource")
+
+  # build tasks by replacing environment variables
+  local pipeline_config=". + {
+    resources: ( .resources + [ $discover_resource ] ),
+    jobs: ( .jobs + [ $job_config + {
+      plan: [
+        {
+          get: \"$discover_resource_name\",
+          trigger: true,
+          params: $job_params_get
+        },
+        {
+          put: \"$sync_resource_name\",
+          params: $job_params_put
+        }
+      ]
+    } ] )
+  }"
+
+  pipeline_config=$(replace_placeholder "$pipeline_config" "DISCOVERY_RESOURCE_NAME" "$source_name")
+  pipeline_config=$(replace_placeholder "$pipeline_config" "BITBUCKET_USERNAME" "$username")
+  pipeline_config=$(replace_placeholder "$pipeline_config" "BITBUCKET_PASSWORD" "$password")
+
+  # add resource and job for source (create temporary file because we can't read/write at the same time)
+  jq "$pipeline_config" < "$pipeline" > "$tmp" && cat "$tmp" > "$pipeline"
+
+  # generate metadata fields for source
+  local source_metadata=$(jq -c "{ name: \"${source_name}\", value: (.uri + \" (\" + .branch + \")\") }" < "$source_payload")
+  echo "$(jq ". + [ $source_metadata ]" < "$result_metadata_payload")" > "$result_metadata_payload"
+
+  # cleanup temp files
+  source_cleanup
+}
+
+# scan all configured repository/branch and call include_source for each of them
+bitbucket_filter_repos_branches "$payload" "include_source"
+
+cat "$pipeline" > "$WORKING_DIR/pipeline.json"
+
+version_json=$(version "$result_payload" "$payload")
+
+jq -n "{
+  version: $version_json,
+  metadata: $(cat "$result_metadata_payload")
+}" >&3

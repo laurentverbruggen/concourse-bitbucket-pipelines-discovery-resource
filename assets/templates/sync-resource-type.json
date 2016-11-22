@@ -1,0 +1,7 @@
+{
+  "name": "pipelines-sync-resource",
+  "type": "docker-image",
+  "source": {
+    "repository": "laurentverbruggen/concourse-pipelines-sync-resource"
+  }
+}

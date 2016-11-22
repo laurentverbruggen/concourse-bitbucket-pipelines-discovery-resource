@@ -1,0 +1,8 @@
+{
+  "name": "%%DISCOVERY_RESOURCE_NAME%%",
+  "type": "pipelines-discovery-resource",
+  "source": {
+    "username": "%%BITBUCKET_USERNAME%%",
+    "password": "%%BITBUCKET_PASSWORD%%"
+  }
+}

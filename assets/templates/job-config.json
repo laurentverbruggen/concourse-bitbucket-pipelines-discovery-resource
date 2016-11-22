@@ -1,0 +1,7 @@
+{
+  "name": "%%DISCOVERY_RESOURCE_NAME%%",
+  "build_logs_to_retain": 5,
+  "public": false,
+  "serial": true,
+  "disable_manual_trigger": false
+}
