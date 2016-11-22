@@ -193,7 +193,7 @@ Every template described below matches a specific part in the default template t
 
 #### Example
 
-Resource configuration to scan a project and only include specific repositories/branches:
+Parameter configuration to pass concourse username/password to sync resource and use a custom reference for syncing:
 
 ``` yaml
 - get: bitbucket-discover
