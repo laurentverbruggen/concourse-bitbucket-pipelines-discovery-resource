@@ -1,9 +1,7 @@
 # Concourse Bitbucket Pipelines Discovery Resource
 
-Concourse resource to scan a Bitbucket project (repositories/branches) to setup pipelines configuration which
-can be included by other resources such as [Concourse Pipelines Sync Resource](https://github.com/laurentverbruggen/concourse-pipelines-sync-resource).
-Advantage is that developers could setup a single pipeline which is able to automatically
-add pipelines for all repositories in that project.
+Concourse resource to scan a Bitbucket project (repositories/branches) to setup pipelines configuration which can be included by other resources such as [Concourse Pipelines Sync Resource](https://github.com/laurentverbruggen/concourse-pipelines-sync-resource).
+Advantage is that developers could setup a single pipeline which is able to automatically add pipelines for all repositories in that project.
 Pipeline configuration can then be included in the same repository instead of a different one.
 For now only basic authentication is supported.
 
@@ -20,8 +18,7 @@ resource_types:
     repository: laurentverbruggen/concourse-bitbucket-pipelines-discovery-resource
 ```
 
-See [concourse docs](http://concourse.ci/configuring-resource-types.html) for more details
-on adding `resource_types` to a pipeline config.
+See [concourse docs](http://concourse.ci/configuring-resource-types.html) for more details on adding `resource_types` to a pipeline config.
 
 ## Source Configuration
 
@@ -30,8 +27,7 @@ on adding `resource_types` to a pipeline config.
 * `project`: *Required.* Bitbucket project to scan for repositories.
 
 * `username`: *Optional.* Username for HTTP(S) auth when pulling/pushing.
-  This is needed when only HTTP/HTTPS protocol for git is available (which does not support private key auth)
-  and auth is required.
+  This is needed when only HTTP/HTTPS protocol for git is available (which does not support private key auth) and auth is required.
 
 * `password`: *Optional.* Password for HTTP(S) auth when pulling/pushing.
 
@@ -70,8 +66,7 @@ To know when the last change was detected a timestamp is also included in the re
 
 ### `in`: Create pipeline configuration for retrieved projects.
 
-Does the same thing as check but here it creates pipeline configuration for every
-repository/branch that was discovered.
+Does the same thing as check but here it creates pipeline configuration for every repository/branch that was discovered.
 
 The pipeline configuration that is created follows the following default template:
 
